@@ -1,0 +1,3 @@
+elasticsearch>=8,<9
+pydantic
+numpy
