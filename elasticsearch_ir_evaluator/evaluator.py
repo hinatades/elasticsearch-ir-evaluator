@@ -1,13 +1,12 @@
-import json
 import sys
 from datetime import datetime
-from typing import Callable, Dict, List, Set, Tuple
+from typing import Callable, Dict, List, Union
 
 import numpy as np
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import BulkIndexError, bulk
 
-from . import Document, QandA
+from .types import Document, QandA
 
 
 class ElasticsearchIrEvaluator:
@@ -17,7 +16,7 @@ class ElasticsearchIrEvaluator:
         self.qa_pairs = []
         self.index_name = None
         self.top_n = 100
-        self.custom_query_template = None
+        self.search_template = None
 
     def load_corpus(self, corpus: List[Document]) -> None:
         """Load the corpus."""
@@ -31,8 +30,12 @@ class ElasticsearchIrEvaluator:
         self.index_name = index_name
         print(f"Index name set to: {self.index_name}")
 
-    def create_index_from_corpus(self) -> None:
-        """Create an index in Elasticsearch using the loaded corpus."""
+    def create_index_from_corpus(self, index_settings=None) -> None:
+        """Create an index in Elasticsearch using the loaded corpus.
+
+        Args:
+            index_settings: Optional. Custom settings for the Elasticsearch index.
+        """
         self.index_name = f'corpus_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
         mapping = {
             "properties": {
@@ -41,13 +44,34 @@ class ElasticsearchIrEvaluator:
                 "text": {"type": "text"},
             }
         }
-        index_settings = {
-            "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+        # Check if any Document in the corpus has a vector and set the dims accordingly
+        vector_dims = None
+        for doc in self.corpus:
+            if doc.vector:
+                vector_dims = len(doc.vector)
+                break
+
+        # Add the vector field to the mapping if vector_dims is found
+        if vector_dims:
+            mapping["properties"]["vector"] = {
+                "type": "dense_vector",
+                "dims": vector_dims,
+                "index": True,
+                "similarity": "cosine",
+            }
+
+        # Index settings
+        index = {
             "mappings": mapping,
+            "settings": {"number_of_shards": 1, "number_of_replicas": 0},
         }
 
-        self.es.indices.create(index=self.index_name, body=index_settings)
-        print(f"Index {self.index_name} created with mapping: {mapping}")
+        # Update index settings if provided
+        if index_settings:
+            index["settings"] = index_settings
+
+        self.es.indices.create(index=self.index_name, body=index)
+        print(f"Index {self.index_name} created with settings: {index}")
 
     def index_corpus(
         self, document_transformer: Callable[[Document], Document] = None, max_retries=3
@@ -92,29 +116,35 @@ class ElasticsearchIrEvaluator:
 
         print("\nIndexing completed.")
 
-    def set_custom_query_template(self, custom_query_template: Dict):
-        """Set a custom query template for Elasticsearch queries."""
-        self.custom_query_template = custom_query_template
+    def set_search_template(self, search_template: Dict):
+        """Set a custom search template for Elasticsearch queries."""
+        self.search_template = search_template
 
-    def _search(self, query: str) -> List[str]:
-        """Perform a search query in Elasticsearch and return the list of document IDs."""
-        if self.custom_query_template is None:
-            query_body = {"match": {"text": query}}
+    def _replace_template(self, template: Union[Dict, List, str], qa_pair: QandA):
+        if isinstance(template, dict):
+            return {k: self._replace_template(v, qa_pair) for k, v in template.items()}
+        elif isinstance(template, list):
+            return [self._replace_template(item, qa_pair) for item in template]
+        elif isinstance(template, str):
+            template = template.replace("{{question}}", qa_pair.question)
+            if qa_pair.vector is not None and "{{vector}}" in template:
+                return qa_pair.vector
+            return template
         else:
-            query_body = self._insert_query_into_template(
-                query, self.custom_query_template
-            )
+            return template
+
+    def _search(self, qa_pair: QandA) -> List[str]:
+        if self.search_template is None:
+            search_body = {"query": {"match": {"text": qa_pair.question}}}
+        else:
+            search_body = self._replace_template(self.search_template, qa_pair)
+
+        search_body["_source"] = ["id"]
 
         response = self.es.search(
-            index=self.index_name, body={"query": query_body}, size=self.top_n
+            index=self.index_name, body=search_body, size=self.top_n
         )
         return [hit["_source"]["id"] for hit in response["hits"]["hits"]]
-
-    def _insert_query_into_template(self, query: str, template: Dict) -> Dict:
-        """Insert the query into the custom query template."""
-        template_str = json.dumps(template)
-        query_filled = template_str.replace("{{question}}", query)
-        return json.loads(query_filled)
 
     def calculate_precision(self, top_n: int = None) -> float:
         """Calculate the precision of the search results."""
@@ -122,10 +152,9 @@ class ElasticsearchIrEvaluator:
         total_precision = 0
 
         for qa_pair in self.qa_pairs:
-            query = qa_pair.question
             correct_answers = set(qa_pair.answers)
 
-            search_results = set(self._search(query))
+            search_results = set(self._search(qa_pair))
             relevant_retrieved = len(search_results & correct_answers)
             total_retrieved = len(search_results)
 
@@ -142,10 +171,9 @@ class ElasticsearchIrEvaluator:
         total_recall = 0
 
         for qa_pair in self.qa_pairs:
-            query = qa_pair.question
             correct_answers = set(qa_pair.answers)
 
-            search_results = set(self._search(query))
+            search_results = set(self._search(qa_pair))
             relevant_retrieved = len(search_results & correct_answers)
             total_relevant = len(correct_answers)
 
@@ -160,14 +188,12 @@ class ElasticsearchIrEvaluator:
         total_mrr = 0
 
         for qa_pair in self.qa_pairs:
-            query = qa_pair.question
             correct_answers = set(qa_pair.answers)
+            search_results = self._search(qa_pair)
 
-            search_results = self._search(query)
             for rank, result in enumerate(search_results, 1):
                 if result in correct_answers:
                     total_mrr += 1 / rank
-                    print(f"{query}: {1 / rank}")
                     break
 
         return total_mrr / len(self.qa_pairs) if self.qa_pairs else 0
@@ -178,10 +204,9 @@ class ElasticsearchIrEvaluator:
         true_negatives = 0
 
         for qa_pair in self.qa_pairs:
-            query = qa_pair.question
             incorrect_answers = set(qa_pair.negative_answers)
 
-            search_results = set(self._search(query))
+            search_results = set(self._search(qa_pair))
             false_positives += len(search_results & incorrect_answers)
             true_negatives += len(incorrect_answers - search_results)
 
@@ -200,10 +225,9 @@ class ElasticsearchIrEvaluator:
         total_ndcg = 0
 
         for qa_pair in self.qa_pairs:
-            query = qa_pair.question
             correct_answers = set(qa_pair.answers)
 
-            search_results = self._search(query)
+            search_results = self._search(qa_pair)
             relevance_scores = [
                 1 if result in correct_answers else 0 for result in search_results
             ]

@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 # Import the ElasticsearchIrEvaluator and QandA from the local module
 from elasticsearch_ir_evaluator import ElasticsearchIrEvaluator, QandA
