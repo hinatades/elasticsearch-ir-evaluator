@@ -1,5 +1,7 @@
 # Elasticsearch IR Evaluator
 
+![PyPI - Version](https://img.shields.io/pypi/v/elasticsearch-ir-evaluator?color=blue)
+
 ## Overview
 
 `elasticsearch-ir-evaluator` is a Python package designed for easily calculating information retrieval (IR) accuracy metrics using Elasticsearch and datasets. It is perfect for users who need to assess the effectiveness of search queries in Elasticsearch.
