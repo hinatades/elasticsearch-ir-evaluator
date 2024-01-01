@@ -1,4 +1,4 @@
-# elasticsearch-ir-evaluator
+# Elasticsearch IR Evaluator
 
 ## Overview
 
@@ -19,7 +19,7 @@ pip install elasticsearch-ir-evaluator
 
 ## Complete Usage Process
 
-The following steps will guide you through using elasticsearch-ir-evaluator to calculate search accuracy metrics:
+The following steps will guide you through using `elasticsearch-ir-evaluator` to calculate search accuracy metrics:
 
 ### Step 1: Set Up Elasticsearch Client
 
@@ -40,12 +40,12 @@ es_client = Elasticsearch(
 
 Load your dataset for the corpus and question-answer pairs. Here we use datasets from Hugging Face, specifically `mr-tydi-corpus` and `mr-tydi` as examples, but you can use any dataset that fits your use case:
 
-Before loading the data into the evaluator, map your dataset to the `Corpus` and `QandA` types provided by the package.
+Before loading the data into the evaluator, map your dataset to the `Document` and `QandA` types provided by the package.
 
 ```python
 from datasets import load_dataset
 from tqdm import tqdm
-from elasticsearch_ir_evaluator import ElasticSearchEvaluator, CorpusDocument, QandA
+from elasticsearch_ir_evaluator import ElasticsearchIrEvaluator, Document, QandA
 
 # Initialize the ElasticSearchEvaluator
 evaluator = ElasticSearchEvaluator(es_client)
@@ -55,7 +55,7 @@ corpus_dataset = load_dataset(
     "castorini/mr-tydi-corpus", "japanese", split="train", trust_remote_code=True
 )
 documents = [
-    Corpus(id=row["docid"], title=row["title"], text=row["text"])
+    Document(id=row["docid"], title=row["title"], text=row["text"])
     for row in tqdm(corpus_dataset)
 ]
 evaluator.load_corpus(documents)
