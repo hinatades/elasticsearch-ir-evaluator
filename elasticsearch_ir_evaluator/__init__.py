@@ -1,2 +1,2 @@
 from .types import Document, QandA
-from .evaluator import ElasticSearchEvaluator
+from .evaluator import ElasticsearchIrEvaluator
