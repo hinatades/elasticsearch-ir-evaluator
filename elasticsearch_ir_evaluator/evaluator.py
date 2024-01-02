@@ -1,5 +1,7 @@
+import logging
 import sys
 from datetime import datetime
+from logging import Level
 from typing import Callable, Dict, List, Union
 
 import numpy as np
@@ -17,6 +19,16 @@ class ElasticsearchIrEvaluator:
         self.index_name = None
         self.top_n = 100
         self.search_template = None
+        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(level=logging.INFO)
+
+    def set_log_level(self, level: Level) -> None:
+        """Set the logging level for this evaluator.
+
+        Args:
+            level (Level): The logging level to set.
+        """
+        self.logger.setLevel(level)
 
     def load_corpus(self, corpus: List[Document]) -> None:
         """Load the corpus."""
@@ -28,7 +40,7 @@ class ElasticsearchIrEvaluator:
     def set_index_name(self, index_name: str):
         """Set the name for the Elasticsearch index."""
         self.index_name = index_name
-        print(f"Index name set to: {self.index_name}")
+        self.logger.info(f"Index name set to: {self.index_name}")
 
     def create_index_from_corpus(self, index_settings=None) -> None:
         """Create an index in Elasticsearch using the loaded corpus.
@@ -71,7 +83,7 @@ class ElasticsearchIrEvaluator:
             index["settings"] = index_settings
 
         self.es.indices.create(index=self.index_name, body=index)
-        print(f"Index {self.index_name} created with settings: {index}")
+        self.logger.info(f"Index {self.index_name} created with settings: {index}")
 
     def index_corpus(
         self, document_transformer: Callable[[Document], Document] = None, max_retries=3
@@ -81,7 +93,7 @@ class ElasticsearchIrEvaluator:
             self.corpus = [document_transformer(doc) for doc in self.corpus]
 
         doc_count = len(self.corpus)
-        print(f"Indexing {doc_count} documents...")
+        self.logger.info(f"Indexing {doc_count} documents...")
 
         bulk_size = 5000
         for i in range(0, doc_count, bulk_size):
@@ -97,7 +109,7 @@ class ElasticsearchIrEvaluator:
                     bulk(self.es, actions)
                     break
                 except BulkIndexError as e:
-                    print(f"Bulk indexing failed: {e.errors}")
+                    self.logger.warning(f"Bulk indexing failed: {e.errors}")
                     actions = [
                         action
                         for action, error in zip(actions, e.errors)
@@ -105,7 +117,7 @@ class ElasticsearchIrEvaluator:
                     ]
                     retries += 1
                 except Exception as e:
-                    print(f"An error occurred: {e}")
+                    self.logger.error(f"An error occurred: {e}")
                     break
 
             progress = (end / doc_count) * 100
@@ -114,7 +126,7 @@ class ElasticsearchIrEvaluator:
             )
             sys.stdout.flush()
 
-        print("\nIndexing completed.")
+        self.logger.info("\nIndexing completed.")
 
     def set_search_template(self, search_template: Dict):
         """Set a custom search template for Elasticsearch queries."""
