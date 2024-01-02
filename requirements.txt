@@ -1,3 +1,4 @@
 elasticsearch>=8,<9
 pydantic
+pytest
 numpy
