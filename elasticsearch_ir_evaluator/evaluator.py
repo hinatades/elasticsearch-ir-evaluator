@@ -1,7 +1,6 @@
 import logging
 import sys
 from datetime import datetime
-from logging import Level
 from typing import Callable, Dict, List, Union
 
 import numpy as np
@@ -22,7 +21,7 @@ class ElasticsearchIrEvaluator:
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)
 
-    def set_log_level(self, level: Level) -> None:
+    def set_log_level(self, level: int) -> None:
         """Set the logging level for this evaluator.
 
         Args:
