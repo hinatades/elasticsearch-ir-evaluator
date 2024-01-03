@@ -1,13 +1,13 @@
 import logging
 import sys
 from datetime import datetime
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import BulkIndexError, bulk
 
-from .types import Document, QandA
+from .types import Document, Passage, QandA
 
 
 class ElasticsearchIrEvaluator:
@@ -53,6 +53,10 @@ class ElasticsearchIrEvaluator:
                 "id": {"type": "keyword"},
                 "title": {"type": "text"},
                 "text": {"type": "text"},
+                "passages": {
+                    "type": "nested",
+                    "properties": {"text": {"type": "text", "index": False}},
+                },
             }
         }
         # Check if any Document in the corpus has a vector and set the dims accordingly
@@ -70,6 +74,18 @@ class ElasticsearchIrEvaluator:
                 "index": True,
                 "similarity": "cosine",
             }
+
+            # Check for vector dimensions in passages
+            for doc in self.corpus:
+                if doc.passages:
+                    for passage in doc.passages:
+                        if passage.vector:
+                            mapping["properties"]["passages"]["properties"][
+                                "vector"
+                            ] = {"type": "dense_vector", "dims": len(passage.vector)}
+                            break
+                    if "vector" in mapping["properties"]["passages"]["properties"]:
+                        break
 
         # Index settings
         index = {
@@ -126,6 +142,30 @@ class ElasticsearchIrEvaluator:
             sys.stdout.flush()
 
         self.logger.info("\nIndexing completed.")
+
+    def chunk(
+        self,
+        chunker: Callable[[str], List[str]],
+        vectorizer: Optional[Callable[[str], List[float]]] = None,
+    ) -> None:
+        """
+        Chunk each document in the corpus.
+
+        Args:
+            chunker: A function that takes a string (document text) and returns a list of strings (passages).
+            vectorizer: Optional. A function that takes a string (passage text) and returns a vector (List[float]).
+
+        This method updates each document in the corpus by adding a 'passages' field,
+        which is a list of Passage objects created from the document's text using the chunker function.
+        If a vectorizer function is provided, it is used to add a vector representation to each Passage.
+        """
+        for doc in self.corpus:
+            passages_texts = chunker(doc.text)
+            passages = [
+                Passage(text=p, vector=vectorizer(p) if vectorizer else None)
+                for p in passages_texts
+            ]
+            doc.passages = passages
 
     def set_search_template(self, search_template: Dict):
         """Set a custom search template for Elasticsearch queries."""
