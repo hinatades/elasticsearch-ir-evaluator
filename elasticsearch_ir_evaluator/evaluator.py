@@ -20,6 +20,7 @@ class ElasticsearchIrEvaluator:
         self.search_template = None
         self.logger = logging.getLogger(__name__)
         logging.basicConfig(level=logging.INFO)
+        logging.getLogger("elastic_transport.transport").setLevel(logging.CRITICAL)
 
     def set_log_level(self, level: int) -> None:
         """Set the logging level for this evaluator.
