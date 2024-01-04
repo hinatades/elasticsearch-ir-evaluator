@@ -10,8 +10,14 @@ class QandA(BaseModel):
     vector: Optional[List[float]] = None
 
 
+class Passage(BaseModel):
+    text: str
+    vector: Optional[List[float]] = None
+
+
 class Document(BaseModel):
     id: str
     text: str
     title: Optional[str] = None
     vector: Optional[List[float]] = None
+    passages: Optional[List[Passage]] = None

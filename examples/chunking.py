@@ -7,7 +7,33 @@ from tqdm.auto import tqdm
 
 from elasticsearch_ir_evaluator.evaluator import (Document,
                                                   ElasticsearchIrEvaluator,
-                                                  QandA)
+                                                  Passage, QandA)
+
+
+def sliding_window_text_chunking(text, window_size, overlap):
+    """
+    Splits a given text into chunks using a sliding window approach.
+
+    :param text: The input text to be chunked.
+    :param window_size: The size of each window/chunk in characters.
+    :param overlap: The number of characters to overlap between consecutive chunks.
+    :return: A list of text chunks.
+    """
+    # Ensure the window size and overlap are valid
+    if window_size <= 0 or overlap < 0 or overlap >= window_size:
+        raise ValueError("Invalid window size or overlap value.")
+
+    chunks = []
+    start = 0
+    while start < len(text):
+        # Determine the end position of the current chunk
+        end = start + window_size
+        # Add the chunk to the list
+        chunks.append(text[start:end])
+        # Move the start position for the next chunk, taking overlap into account
+        start = end - overlap
+
+    return chunks
 
 
 def main():
@@ -29,14 +55,24 @@ def main():
         split="train",
         trust_remote_code=True,
     )
+
+    window_size = 200
+    overlap = 20
+
     documents = []
     for i, row in enumerate(tqdm(corpus_dataset)):
-        if i >= 100:
-            break
-        embedding = get_embedding(row["text"], engine="text-embedding-ada-002")
+        passages = [
+            Passage(text=sentence, vector=None)
+            for sentence in sliding_window_text_chunking(
+                row["text"], window_size, overlap
+            )
+        ]
         documents.append(
             Document(
-                id=row["docid"], title=row["title"], text=row["text"], vector=embedding
+                id=row["docid"],
+                title=row["title"],
+                text=row["text"],
+                passages=passages,
             )
         )
     evaluator.load_corpus(documents)
@@ -53,37 +89,25 @@ def main():
     )
     qa_pairs = []
     for i, row in enumerate(tqdm(qa_dataset)):
-        if i >= 100:
-            break
-        vector = get_embedding(row["query"], engine="text-embedding-ada-002")
-
         qa_pairs.append(
             QandA(
                 question=row["query"],
                 answers=[p["docid"] for p in row["positive_passages"]],
                 negative_answers=[p["docid"] for p in row["negative_passages"]],
-                vector=vector,
             )
         )
 
     evaluator.load_qa_pairs(qa_pairs)
 
-    # Set the index name in Elasticsearch
-    # evaluator.set_index_name("corpus_xxxxxx")
-
     # Define a custom query template for Elasticsearch
     search_template = {
         "query": {
-            "bool": {
-                "must": {"match": {"text": "{{question}}"}},
-            }
-        },
-        "knn": {
-            "field": "vector",
-            "query_vector": "{{vector}}",
-            "k": 10,
-            "num_candidates": 100,
-        },
+            "nested": {
+                "path": "passages",
+                "query": {"match": {"passages.text": "{{question}}"}},
+                "inner_hits": {},
+            },
+        }
     }
     evaluator.set_search_template(search_template)
 
