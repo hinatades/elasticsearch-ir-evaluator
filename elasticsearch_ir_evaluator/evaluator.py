@@ -55,7 +55,7 @@ class ElasticsearchIrEvaluator:
                 "text": {"type": "text"},
                 "passages": {
                     "type": "nested",
-                    "properties": {"text": {"type": "text", "index": False}},
+                    "properties": {"text": {"type": "text", "index": True}},
                 },
             }
         }
@@ -141,7 +141,8 @@ class ElasticsearchIrEvaluator:
             )
             sys.stdout.flush()
 
-        self.logger.info("\nIndexing completed.")
+        print()
+        self.logger.info("Indexing completed.")
 
     def chunk(
         self,
