@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from datetime import datetime
@@ -107,7 +108,9 @@ class ElasticsearchIrEvaluator:
             index["settings"] = index_settings
 
         self.es.indices.create(index=self.index_name, body=index)
-        self.logger.info(f"Index {self.index_name} created with settings: {index}")
+        self.logger.info(
+            f"Index {self.index_name} created with settings: \n{json.dumps(index, indent=2)}"
+        )
 
     def index_corpus(
         self, document_transformer: Callable[[Document], Document] = None, max_retries=3
