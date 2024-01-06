@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 from datetime import datetime
@@ -42,21 +43,29 @@ class ElasticsearchIrEvaluator:
         self.index_name = index_name
         self.logger.info(f"Index name set to: {self.index_name}")
 
-    def create_index_from_corpus(self, index_settings=None) -> None:
+    def create_index_from_corpus(
+        self, index_settings=None, text_field_config=None
+    ) -> None:
         """Create an index in Elasticsearch using the loaded corpus.
 
         Args:
             index_settings: Optional. Custom settings for the Elasticsearch index.
+            text_field_config: Optional. Configuration dictionary for text type fields.
         """
         self.index_name = f'corpus_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+        text_field_settings = {"type": "text"}
+        # Ensure "type": "text" is always included in text_field_config
+        if text_field_config is not None:
+            text_field_settings = text_field_settings | {**text_field_config}
+
         mapping = {
             "properties": {
                 "id": {"type": "keyword"},
-                "title": {"type": "text"},
-                "text": {"type": "text"},
+                "title": text_field_settings,
+                "text": text_field_settings,
                 "passages": {
                     "type": "nested",
-                    "properties": {"text": {"type": "text", "index": True}},
+                    "properties": {"text": text_field_settings},
                 },
             }
         }
@@ -99,7 +108,9 @@ class ElasticsearchIrEvaluator:
             index["settings"] = index_settings
 
         self.es.indices.create(index=self.index_name, body=index)
-        self.logger.info(f"Index {self.index_name} created with settings: {index}")
+        self.logger.info(
+            f"Index {self.index_name} created with settings: \n{json.dumps(index, indent=2)}"
+        )
 
     def index_corpus(
         self, document_transformer: Callable[[Document], Document] = None, max_retries=3
