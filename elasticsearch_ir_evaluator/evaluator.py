@@ -14,8 +14,17 @@ from .types import Document, Passage, QandA
 
 class ElasticsearchIrEvaluator:
     def __init__(self, es_client: Elasticsearch):
+        """
+        Constructor for the ElasticsearchIrEvaluator class.
+
+        This class provides tools for evaluating Information Retrieval (IR) systems using Elasticsearch.
+        The constructor initializes the Elasticsearch client and sets up initial configurations.
+
+        Args:
+            es_client (Elasticsearch): An instance of the Elasticsearch client.
+        """
         self.es = es_client
-        self.bulk_size = 5000
+        self.max_bulk_size = 5000
         self.max_retries = 3
         self.top_n = 100
         self.index_name = None
@@ -27,25 +36,60 @@ class ElasticsearchIrEvaluator:
         logging.getLogger("elastic_transport.transport").setLevel(logging.CRITICAL)
 
     def set_log_level(self, level: int) -> None:
-        """Set the logging level for this evaluator.
+        """
+        Set the logging level for this evaluator.
+
+        This method allows the user to set the logging level to control the amount and type of logs generated.
 
         Args:
-            level (Level): The logging level to set.
+            level (int): The logging level to set. Example: logging.INFO, logging.DEBUG.
         """
         self.logger.setLevel(level)
 
     def set_index_name(self, index_name: str):
-        """Set the name for the Elasticsearch index."""
+        """
+        Sets the name for the Elasticsearch index.
+
+        This method is used to set the name of the Elasticsearch index to be used.
+
+        Args:
+            index_name (str): The name of the index to be set.
+        """
         self.index_name = index_name
         self.logger.info(f"Index name set to: {self.index_name}")
 
     def set_index_settings(self, index_settings: Dict):
+        """
+        Set custom settings for the Elasticsearch index.
+
+        This method is used to provide custom settings for the Elasticsearch index, such as the number of shards.
+
+        Args:
+            index_settings (Dict): A dictionary containing index settings.
+        """
         self.index_settings = index_settings
 
     def set_text_field_config(self, text_field_config: Dict):
+        """
+        Set configuration for the text fields of the Elasticsearch index.
+
+        This method is used to set specific configurations for text fields, like analyzers or term vectors.
+
+        Args:
+            text_field_config (Dict): A dictionary containing text field configurations.
+        """
         self.text_field_config = text_field_config
 
     def _create_index(self, sample_document: Document) -> None:
+        """
+        Creates an Elasticsearch index based on a sample document.
+
+        This private method automatically generates an index with appropriate settings and mappings
+        based on the provided sample document, including handling vector fields if present.
+
+        Args:
+            sample_document (Document): A sample document used to determine the structure of the index.
+        """
         self.index_name = f'corpus_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
         text_field_settings = {"type": "text"}
         # Ensure "type": "text" is always included in text_field_config
@@ -102,7 +146,16 @@ class ElasticsearchIrEvaluator:
             f"Index {self.index_name} created with settings: \n{json.dumps(index, indent=2)}"
         )
 
-    def _bulk(self, actions):
+    def _bulk(self, actions: List[Dict]):
+        """
+        Executes a bulk indexing operation in Elasticsearch.
+
+        This private method attempts to perform a bulk indexing operation, and retries if it encounters
+        a BulkIndexError, up to a maximum number of retries.
+
+        Args:
+            actions (List[Dict]): A list of actions (documents) to be bulk indexed.
+        """
         retries = 0
         while retries < self.max_retries:
             try:
@@ -124,6 +177,14 @@ class ElasticsearchIrEvaluator:
         self,
         documents: List[Document],
     ) -> None:
+        """
+        Index the given documents in Elasticsearch.
+
+        This method takes a list of documents and indexes them in Elasticsearch. It handles bulk indexing and monitors progress.
+
+        Args:
+            documents (List[Document]): A list of documents to be indexed. Each document should be an instance of the Document class.
+        """
 
         if not self.index_name:
             self._create_index(documents[0])
@@ -136,7 +197,7 @@ class ElasticsearchIrEvaluator:
             action = {"_index": self.index_name, "_source": doc.dict()}
             actions.append(action)
 
-            if len(actions) >= self.bulk_size:
+            if len(actions) >= self.max_bulk_size:
                 self._bulk(actions)
                 end += len(actions)
                 actions = []
@@ -161,10 +222,30 @@ class ElasticsearchIrEvaluator:
         self.logger.info("Indexing completed.")
 
     def set_search_template(self, search_template: Dict):
-        """Set a custom search template for Elasticsearch queries."""
+        """
+        Set a custom search template for Elasticsearch queries.
+
+        This method allows setting up a custom query template for more advanced or specific search requirements.
+        In the provided QA dataset iterator, each question is inserted into the '{{question}}' placeholder,
+        and if present, the question's vector is inserted into the '{{vector}}' placeholder in the template.
+
+        Args:
+            search_template (Dict): A dictionary representing the search template.
+        """
         self.search_template = search_template
 
     def _replace_template(self, template: Union[Dict, List, str], qa_pair: QandA):
+        """
+        Replace placeholders in the search template with actual query data.
+
+        This private method replaces the placeholders '{{question}}' and '{{vector}}' in the search template
+        with the actual question and vector from the QandA object. The '{{question}}' placeholder is replaced
+        with the text of the question, and '{{vector}}', if present, is replaced with the question's vector.
+
+        Args:
+            template (Union[Dict, List, str]): The search template with placeholders.
+            qa_pair (QandA): The question-answer pair containing the question and optional vector.
+        """
         if isinstance(template, dict):
             return {k: self._replace_template(v, qa_pair) for k, v in template.items()}
         elif isinstance(template, list):
@@ -178,6 +259,18 @@ class ElasticsearchIrEvaluator:
             return template
 
     def _search(self, qa_pair: QandA) -> List[str]:
+        """
+        Perform a search query in Elasticsearch using a given question-answer pair.
+
+        This private method executes a search query in Elasticsearch based on the question in the given QandA object.
+        It uses the custom search template if set, or a default match query otherwise.
+
+        Args:
+            qa_pair (QandA): The question-answer pair to base the search query on.
+
+        Returns:
+            List[str]: A list of document IDs that match the search query.
+        """
         if self.search_template is None:
             search_body = {"query": {"match": {"text": qa_pair.question}}}
         else:
@@ -191,7 +284,15 @@ class ElasticsearchIrEvaluator:
         return [hit["_source"]["id"] for hit in response["hits"]["hits"]]
 
     def calculate_precision(self, qa_pairs: List[QandA], top_n: int = None) -> float:
-        """Calculate the precision of the search results."""
+        """
+        Calculate the precision of the search results.
+
+        This method computes the precision metric for the search results given a list of question-answer pairs.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for calculating precision. Defaults to the class's top_n attribute.
+        """
         self.top_n = top_n if top_n is not None else self.top_n
         total_precision = 0
 
@@ -210,7 +311,16 @@ class ElasticsearchIrEvaluator:
         return total_precision / len(qa_pairs) if qa_pairs else 0
 
     def calculate_recall(self, qa_pairs: List[QandA], top_n: int = None) -> float:
-        """Calculate the recall of the search results."""
+        """
+        Calculate the recall of the search results.
+
+        This method computes the recall metric for the search results given a list of question-answer pairs,
+        which is the proportion of relevant documents that are successfully retrieved.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for calculating recall. Defaults to the class's top_n attribute.
+        """
         self.top_n = top_n if top_n is not None else self.top_n
         total_recall = 0
 
@@ -227,7 +337,17 @@ class ElasticsearchIrEvaluator:
         return total_recall / len(qa_pairs) if qa_pairs else 0
 
     def calculate_mrr(self, qa_pairs: List[QandA], top_n: int = None) -> float:
-        """Calculate the Mean Reciprocal Rank (MRR) of the search results."""
+        """
+        Calculate the Mean Reciprocal Rank (MRR) of the search results.
+
+        This method calculates the MRR metric, which is the average of reciprocal ranks of the first relevant answer
+        for a set of queries.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for calculating MRR. Defaults to the class's top_n attribute.
+        """
+
         self.top_n = top_n if top_n is not None else self.top_n
         total_mrr = 0
 
@@ -243,7 +363,15 @@ class ElasticsearchIrEvaluator:
         return total_mrr / len(qa_pairs) if qa_pairs else 0
 
     def calculate_fpr(self, qa_pairs: List[QandA]) -> float:
-        """Calculate the False Positive Rate (FPR) of the search results."""
+        """
+        Calculate the False Positive Rate (FPR) of the search results.
+
+        This method calculates the FPR metric, which is the ratio of the number of false positives to the total
+        number of actual negatives.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation, including negative answers.
+        """
         false_positives = 0
         true_negatives = 0
 
@@ -261,7 +389,15 @@ class ElasticsearchIrEvaluator:
         )
 
     def calculate_ndcg(self, qa_pairs: List[QandA]) -> float:
-        """Calculate the normalized Discounted Cumulative Gain (nDCG) of the search results."""
+        """
+        Calculate the normalized Discounted Cumulative Gain (nDCG) of the search results.
+
+        This method calculates the nDCG metric, a measure of ranking quality that considers the position
+        of correct answers, penalizing correct answers that appear lower in the search results.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+        """
 
         def dcg(scores):
             return np.sum([(2**s - 1) / np.log2(i + 2) for i, s in enumerate(scores)])
