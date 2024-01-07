@@ -5,9 +5,11 @@ from elasticsearch import Elasticsearch
 from openai.embeddings_utils import get_embedding
 from tqdm.auto import tqdm
 
-from elasticsearch_ir_evaluator.evaluator import (Document,
-                                                  ElasticsearchIrEvaluator,
-                                                  QandA)
+from elasticsearch_ir_evaluator.evaluator import (
+    Document,
+    ElasticsearchIrEvaluator,
+    QandA,
+)
 
 
 def main():
