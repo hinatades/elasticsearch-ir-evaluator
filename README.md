@@ -4,7 +4,7 @@
 
 ## Overview
 
-`elasticsearch-ir-evaluator` is a Python package designed for easily calculating information retrieval (IR) accuracy metrics using Elasticsearch and datasets. It is perfect for users who need to assess the effectiveness of search queries in Elasticsearch.
+`elasticsearch-ir-evaluator` is a Python package designed for easily calculating information retrieval (IR) accuracy metrics using Elasticsearch and datasets. It is perfect for users who want to assess the effectiveness of search queries in Elasticsearch.
 
 ## Installation
 
@@ -16,7 +16,7 @@ pip install elasticsearch-ir-evaluator
 
 ## Prerequisites
 
-- Elasticsearch running on your system.
+- Elasticsearch version 8.11 or higher running on your system.
 - Python 3.8 or higher.
 
 ## Complete Usage Process
@@ -38,81 +38,70 @@ es_client = Elasticsearch(
 )
 ```
 
-### Step 2: Load Corpus and QA Pairs
+### Step 2: Create and Index the Corpus
 
-Load your dataset for the corpus and question-answer pairs. Here we use datasets from Hugging Face, specifically `mr-tydi-corpus` and `mr-tydi` as examples, but you can use any dataset that fits your use case:
-
-Before loading the data into the evaluator, map your dataset to the `Document` and `QandA` types provided by the package.
+Create and index a new corpus. You can customize index settings and text field configurations, including analyzers:
 
 ```python
-from datasets import load_dataset
-from tqdm import tqdm
-from elasticsearch_ir_evaluator import ElasticsearchIrEvaluator, Document, QandA
+from elasticsearch_ir_evaluator import ElasticsearchIrEvaluator, Document
 
-# Initialize the ElasticSearchEvaluator
-evaluator = ElasticSearchEvaluator(es_client)
+# Initialize the ElasticsearchIrEvaluator
+evaluator = ElasticsearchIrEvaluator(es_client)
 
-# Load the corpus dataset from Hugging Face
-corpus_dataset = load_dataset(
-    "castorini/mr-tydi-corpus", "japanese", split="train", trust_remote_code=True
-)
+# Specify your documents
 documents = [
-    Document(id=row["docid"], title=row["title"], text=row["text"])
-    for row in tqdm(corpus_dataset)
+    Document(id="doc1", title="Title 1", text="Text of document 1"),
+    Document(id="doc2", title="Title 2", text="Text of document 2"),
+    # ... more documents
 ]
-evaluator.load_corpus(documents)
 
-# Load the QA dataset from Hugging Face
-qa_dataset = load_dataset(
-    "castorini/mr-tydi", "japanese", split="test", trust_remote_code=True
-)
-qa_pairs = [
-    QandA(
-        question=row["query"],
-        answers=[p["docid"] for p in row["positive_passages"]],
-        negative_answers=[p["docid"] for p in row["negative_passages"]],
-    )
-    for row in tqdm(qa_dataset)
-]
-evaluator.load_qa_pairs(qa_pairs)
+# Set custom index settings and text field configurations
+index_settings = {"number_of_shards": 1, "number_of_replicas": 0}
+text_field_config = {"analyzer": "standard"}
+
+evaluator.set_index_settings(index_settings)
+evaluator.set_text_field_config(text_field_config)
+
+# Create a new index or set an existing one
+evaluator.set_index_name("your_index_name")
+
+# Index documents with an optional ingest pipeline
+evaluator.index(documents, pipeline="your_optional_pipeline")
 ```
 
-### Step 3: Create and Index the Corpus
+### Step 3: Set a Custom Search Template
 
-Create a new index from the loaded corpus or set an existing index:
-
-```python
-# Create a new index from the loaded corpus
-# This will create an Elasticsearch index using the documents loaded into the evaluator
-evaluator.create_index_from_corpus()
-
-# Alternatively, set an existing index name to use with the evaluator
-# This is useful if you already have an index and want to use it for evaluation
-evaluator.set_index_name("your_existing_index_name")
-```
-
-### Step 4: Calculate Accuracy Metrics
-
-Calculate accuracy metrics and set a custom query template for Elasticsearch search:
+Customize the search query template for Elasticsearch. Use `{{question}}` for the question text and `{{vector}}` for the vector value in QandA:
 
 ```python
-# Optionally, set a custom query template for Elasticsearch
-# {{question}} in the template will be replaced with each actual question
-custom_query_template = {
+search_template = {
     "match": {
         "text": "{{question}}"
     }
 }
-evaluator.set_custom_query_template(custom_query_template)
 
-# Calculate and output the precision, recall, false positive rate, and nDCG
-precision = evaluator.calculate_precision()
-recall = evaluator.calculate_recall()
-fpr = evaluator.calculate_fpr()
-ndcg = evaluator.calculate_ndcg()
-
-print(f"Precision: {precision}, Recall: {recall}, False Positive Rate: {fpr}, nDCG: {ndcg}")
+evaluator.set_search_template(search_template)
 ```
+
+### Step 4: Calculate Accuracy Metrics
+
+Use `.calculate()` to compute all possible metrics based on the structure of the provided dataset:
+
+```python
+# Load QA pairs for evaluation
+qa_pairs = [
+    QandA(question="What is Elasticsearch?", answers=["doc1"]),
+    # ... more QA pairs
+]
+
+# Calculate all metrics
+results = evaluator.calculate(qa_pairs)
+
+# Output results
+print(result.model_dump_json(indent=4))
+```
+
+This step involves a comprehensive evaluation of search performance using the provided question-answer pairs. The `.calculate()` method computes all metrics that can be derived from the dataset's structure.
 
 ## License
 
