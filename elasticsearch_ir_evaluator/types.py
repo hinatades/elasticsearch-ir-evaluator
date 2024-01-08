@@ -31,3 +31,14 @@ class Document(BaseModel):
                 'Either "text" or at least one "passages[].text" must be provided'
             )
         return passages
+
+
+class Result(BaseModel):
+    Precision: Optional[float] = None
+    Recall: Optional[float] = None
+    FPR: Optional[float] = None
+    nDCG: Optional[float] = None
+    MAP: Optional[float] = None
+    CG: Optional[float] = None
+    BPref: Optional[float] = None
+    MRR: Optional[float] = None

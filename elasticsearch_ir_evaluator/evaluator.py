@@ -8,8 +8,9 @@ import numpy as np
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import BulkIndexError, bulk
+from tqdm import tqdm
 
-from .types import Document, Passage, QandA
+from .types import Document, Passage, QandA, Result
 
 
 class ElasticsearchIrEvaluator:
@@ -420,3 +421,218 @@ class ElasticsearchIrEvaluator:
             total_ndcg += nDCG
 
         return total_ndcg / len(qa_pairs) if qa_pairs else 0
+
+    def calculate_map(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
+        """
+        Calculate the Mean Average Precision (MAP).
+
+        MAP is the mean of the Average Precision scores for each query, which is the average of the precision scores
+        after each relevant document is retrieved.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
+
+        Returns:
+            float: The MAP score.
+        """
+        if top_n is not None:
+            self.top_n = top_n
+        total_average_precision = 0
+
+        for qa_pair in qa_pairs:
+            search_results = set(self._search(qa_pair))
+            relevant_documents = set(qa_pair.answers)
+            average_precision, relevant_count = 0, 0
+
+            for i, doc_id in enumerate(search_results, 1):
+                if doc_id in relevant_documents:
+                    relevant_count += 1
+                    precision_at_i = relevant_count / i
+                    average_precision += precision_at_i
+
+            total_average_precision += (
+                average_precision / len(relevant_documents) if relevant_documents else 0
+            )
+
+        return total_average_precision / len(qa_pairs) if qa_pairs else 0
+
+    def calculate_cg(self, qa_pairs: List[QandA], top_n: Optional[int] = None) -> float:
+        """
+        Calculate the Cumulative Gain (CG).
+
+        CG is the sum of the relevancy scores of the top N search results. The relevancy score is binary (relevant or not).
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
+
+        Returns:
+            float: The CG score.
+        """
+        if top_n is not None:
+            self.top_n = top_n
+        total_cg = 0
+
+        for qa_pair in qa_pairs:
+            search_results = self._search(qa_pair)
+            relevant_documents = set(qa_pair.answers)
+            cg_score = sum(
+                1 for doc_id in search_results if doc_id in relevant_documents
+            )
+
+            total_cg += cg_score
+
+        return total_cg / len(qa_pairs) if qa_pairs else 0
+
+    def calculate_bpref(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
+        """
+        Calculate the Binary Preference (BPref).
+
+        BPref measures how often relevant documents are ranked above non-relevant documents. It is based on pairs of
+        relevant and non-relevant documents.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
+
+        Returns:
+            float: The BPref score.
+        """
+        if top_n is not None:
+            self.top_n = top_n
+        total_bpref = 0
+
+        for qa_pair in qa_pairs:
+            search_results = set(self._search(qa_pair))
+            relevant_documents = set(qa_pair.answers)
+            non_relevant_documents = (
+                set(qa_pair.negative_answers) if qa_pair.negative_answers else set()
+            )
+
+            bpref_score, count_relevant = 0, 0
+            for doc_id in search_results:
+                if doc_id in relevant_documents:
+                    count_relevant += 1
+                    bpref_score += 1 - (
+                        len(
+                            [
+                                d
+                                for d in non_relevant_documents
+                                if d in search_results
+                                and search_results.index(d)
+                                < search_results.index(doc_id)
+                            ]
+                        )
+                        / len(non_relevant_documents)
+                    )
+
+            total_bpref += (
+                bpref_score / len(relevant_documents) if relevant_documents else 0
+            )
+
+        return total_bpref / len(qa_pairs) if qa_pairs else 0
+
+    def calculate(self, qa_pairs: List[QandA], top_n: Optional[int] = None) -> Result:
+        """
+        Calculate all possible metrics based on the given QA pairs in a single iteration.
+
+        This method calculates various search evaluation metrics such as Precision, Recall, FPR, nDCG, MAP, CG, BPref, and MRR
+        based on the available data in the QA pairs. It does so by performing a single search per QA pair and reusing the results for each metric.
+
+        Args:
+            qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
+
+        Returns:
+            Result: An instance of MetricsResults containing the calculated metrics.
+        """
+        if top_n is not None:
+            self.top_n = top_n
+
+        results = Result()
+        sum_precision = (
+            sum_recall
+        ) = sum_fpr = sum_ndcg = sum_map = sum_cg = sum_bpref = sum_mrr = 0
+        total_pairs = len(qa_pairs)
+
+        for qa_pair in tqdm(qa_pairs, desc="Calculating metrics"):
+            search_results = self._search(qa_pair)
+            relevant_documents = set(qa_pair.answers)
+            non_relevant_documents = (
+                set(qa_pair.negative_answers) if qa_pair.negative_answers else set()
+            )
+
+            # MAP, BPref, and MRR variables
+            average_precision = bpref_score = mrr_added = 0
+            relevant_count = 0
+
+            # nDCG variables
+            dcg = idcg = 0
+
+            for i, doc_id in enumerate(search_results, 1):
+                if doc_id in relevant_documents:
+                    relevant_count += 1
+                    precision_at_i = relevant_count / i
+                    average_precision += precision_at_i
+                    dcg += 1 / np.log2(i + 1)
+
+                    if not mrr_added:
+                        sum_mrr += 1 / i
+                        mrr_added = True
+
+                if doc_id in non_relevant_documents:
+                    non_relevant_before = len(
+                        [
+                            d
+                            for d in non_relevant_documents
+                            if d in search_results and search_results.index(d) < i
+                        ]
+                    )
+                    bpref_score += 1 - (
+                        non_relevant_before / len(non_relevant_documents)
+                    )
+
+                if i <= len(relevant_documents):
+                    idcg += 1 / np.log2(i + 1)
+
+            # Update cumulative sums
+            sum_map += (
+                average_precision / len(relevant_documents) if relevant_documents else 0
+            )
+            sum_bpref += (
+                bpref_score / len(relevant_documents) if relevant_documents else 0
+            )
+            sum_ndcg += dcg / idcg if idcg > 0 else 0
+            sum_cg += relevant_count
+
+            # Precision and Recall
+            true_positives = relevant_count
+            false_positives = len(search_results) - true_positives
+            sum_precision += (
+                true_positives / len(search_results) if search_results else 0
+            )
+            sum_recall += (
+                true_positives / len(relevant_documents) if relevant_documents else 0
+            )
+            sum_fpr += (
+                false_positives / len(non_relevant_documents)
+                if non_relevant_documents
+                else 0
+            )
+
+        # Finalize the averages
+        results.Precision = sum_precision / total_pairs
+        results.Recall = sum_recall / total_pairs
+        results.FPR = sum_fpr / total_pairs if non_relevant_documents else None
+        results.nDCG = sum_ndcg / total_pairs
+        results.MAP = sum_map / total_pairs
+        results.CG = sum_cg / total_pairs
+        results.BPref = sum_bpref / total_pairs if non_relevant_documents else None
+        results.MRR = sum_mrr / total_pairs
+
+        return results
