@@ -4,11 +4,9 @@ from datasets import load_dataset
 from elasticsearch import Elasticsearch
 from tqdm.auto import tqdm
 
-from elasticsearch_ir_evaluator.evaluator import (
-    Document,
-    ElasticsearchIrEvaluator,
-    QandA,
-)
+from elasticsearch_ir_evaluator.evaluator import (Document,
+                                                  ElasticsearchIrEvaluator,
+                                                  QandA)
 
 
 def main():

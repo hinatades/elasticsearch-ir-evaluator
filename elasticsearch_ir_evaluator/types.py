@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 
 
 class QandA(BaseModel):
@@ -22,7 +22,7 @@ class Document(BaseModel):
     vector: Optional[List[float]] = None
     passages: Optional[List[Passage]] = None
 
-    @validator("passages", pre=True, always=True)
+    @field_validator("passages")
     def check_text_or_passages(cls, passages, values, **kwargs):
         if values.get("text") is None and (
             not passages or all(p.text is None for p in passages)
@@ -43,7 +43,7 @@ class Result(BaseModel):
     BPref: Optional[float] = None
     MRR: Optional[float] = None
 
-    @validator(
+    @field_validator(
         "Precision",
         "Recall",
         "FPR",
@@ -52,8 +52,6 @@ class Result(BaseModel):
         "CG",
         "BPref",
         "MRR",
-        pre=True,
-        always=True,
     )
     def round_float(cls, v):
         return round(v, 3) if v is not None else None
