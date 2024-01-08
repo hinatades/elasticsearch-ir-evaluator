@@ -176,14 +176,17 @@ class ElasticsearchIrEvaluator:
     def index(
         self,
         documents: List[Document],
+        pipeline: Optional[str] = None
     ) -> None:
         """
         Index the given documents in Elasticsearch.
 
         This method takes a list of documents and indexes them in Elasticsearch. It handles bulk indexing and monitors progress.
+        An optional ingest pipeline can be specified for preprocessing the documents before indexing.
 
         Args:
             documents (List[Document]): A list of documents to be indexed. Each document should be an instance of the Document class.
+            pipeline (str, optional): The name of the ingest pipeline to be used for preprocessing documents.
         """
 
         if not self.index_name:
@@ -195,6 +198,9 @@ class ElasticsearchIrEvaluator:
         self.logger.info(f"Indexing {doc_count} documents...")
         for doc in documents:
             action = {"_index": self.index_name, "_source": doc.dict()}
+            if pipeline:
+                action["_op_type"] = "index"
+                action["pipeline"] = pipeline
             actions.append(action)
 
             if len(actions) >= self.max_bulk_size:
