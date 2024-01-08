@@ -8,7 +8,6 @@ import numpy as np
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import BulkIndexError, bulk
-from tqdm import tqdm
 
 from .types import Document, Passage, QandA, Result
 
@@ -578,7 +577,7 @@ class ElasticsearchIrEvaluator:
         ) = sum_fpr = sum_ndcg = sum_map = sum_cg = sum_bpref = sum_mrr = 0
         total_pairs = len(qa_pairs)
 
-        for qa_pair in tqdm(qa_pairs, desc="Calculating metrics"):
+        for qa_pair in qa_pairs:
             search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             non_relevant_documents = (
