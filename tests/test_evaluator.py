@@ -21,10 +21,9 @@ def test_calculate_mrr():
     qa_pairs = [
         QandA(question="test query", answers=["doc1"], negative_answers=["doc3"])
     ]
-    evaluator.load_qa_pairs(qa_pairs)
 
     # Calculate MRR
-    mrr = evaluator.calculate_mrr()
+    mrr = evaluator.calculate_mrr(qa_pairs)
 
     # Assert the expected MRR value
     assert mrr == 1.0  # Adjust the expected value of MRR as needed
