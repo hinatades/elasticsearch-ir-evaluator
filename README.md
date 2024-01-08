@@ -4,7 +4,18 @@
 
 ## Overview
 
-`elasticsearch-ir-evaluator` is a Python package designed for easily calculating information retrieval (IR) accuracy metrics using Elasticsearch and datasets. It is perfect for users who want to assess the effectiveness of search queries in Elasticsearch.
+`elasticsearch-ir-evaluator` is a Python package designed for easily calculating a range of information retrieval (IR) accuracy metrics using Elasticsearch and datasets. This tool is ideal for users who need to assess the effectiveness of search queries in Elasticsearch. It supports the following key IR metrics:
+
+- Precision
+- Recall
+- False Positive Rate (FPR)
+- Normalized Discounted Cumulative Gain (nDCG)
+- Mean Average Precision (MAP)
+- Cumulative Gain (CG)
+- Binary Preference (BPref)
+- Mean Reciprocal Rank (MRR)
+
+These metrics provide a comprehensive assessment of search performance, catering to various aspects of IR system evaluation. The tool's flexibility allows users to select specific metrics according to their evaluation needs.
 
 ## Installation
 
