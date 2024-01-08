@@ -32,7 +32,8 @@ pip install elasticsearch-ir-evaluator
 
 ## Complete Usage Process
 
-The following steps will guide you through using `elasticsearch-ir-evaluator` to calculate search accuracy metrics:
+The following steps will guide you through using `elasticsearch-ir-evaluator` to calculate search accuracy metrics. 
+For more detailed and practical examples, please refer to the [examples](https://github.com/hinatades/elasticsearch-ir-evaluator/tree/main/examples) directory in this repository.
 
 ### Step 1: Set Up Elasticsearch Client
 
