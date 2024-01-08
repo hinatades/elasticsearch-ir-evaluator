@@ -284,7 +284,9 @@ class ElasticsearchIrEvaluator:
         )
         return [hit["_source"]["id"] for hit in response["hits"]["hits"]]
 
-    def calculate_precision(self, qa_pairs: List[QandA], top_n: int = None) -> float:
+    def calculate_precision(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
         """
         Calculate the precision of the search results.
 
@@ -292,9 +294,10 @@ class ElasticsearchIrEvaluator:
 
         Args:
             qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
-            top_n (int, optional): The number of top results to consider for calculating precision. Defaults to the class's top_n attribute.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
         """
-        self.top_n = top_n if top_n is not None else self.top_n
+        if top_n is not None:
+            self.top_n = top_n
         total_precision = 0
 
         for qa_pair in qa_pairs:
@@ -311,7 +314,9 @@ class ElasticsearchIrEvaluator:
 
         return total_precision / len(qa_pairs) if qa_pairs else 0
 
-    def calculate_recall(self, qa_pairs: List[QandA], top_n: int = None) -> float:
+    def calculate_recall(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
         """
         Calculate the recall of the search results.
 
@@ -320,9 +325,10 @@ class ElasticsearchIrEvaluator:
 
         Args:
             qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
-            top_n (int, optional): The number of top results to consider for calculating recall. Defaults to the class's top_n attribute.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
         """
-        self.top_n = top_n if top_n is not None else self.top_n
+        if top_n is not None:
+            self.top_n = top_n
         total_recall = 0
 
         for qa_pair in qa_pairs:
@@ -337,7 +343,9 @@ class ElasticsearchIrEvaluator:
 
         return total_recall / len(qa_pairs) if qa_pairs else 0
 
-    def calculate_mrr(self, qa_pairs: List[QandA], top_n: int = None) -> float:
+    def calculate_mrr(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
         """
         Calculate the Mean Reciprocal Rank (MRR) of the search results.
 
@@ -346,10 +354,11 @@ class ElasticsearchIrEvaluator:
 
         Args:
             qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
-            top_n (int, optional): The number of top results to consider for calculating MRR. Defaults to the class's top_n attribute.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
         """
+        if top_n is not None:
+            self.top_n = top_n
 
-        self.top_n = top_n if top_n is not None else self.top_n
         total_mrr = 0
 
         for qa_pair in qa_pairs:
@@ -363,7 +372,9 @@ class ElasticsearchIrEvaluator:
 
         return total_mrr / len(qa_pairs) if qa_pairs else 0
 
-    def calculate_fpr(self, qa_pairs: List[QandA]) -> float:
+    def calculate_fpr(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
         """
         Calculate the False Positive Rate (FPR) of the search results.
 
@@ -372,7 +383,10 @@ class ElasticsearchIrEvaluator:
 
         Args:
             qa_pairs (List[QandA]): A list of question-answer pairs for evaluation, including negative answers.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
         """
+        if top_n is not None:
+            self.top_n = top_n
         false_positives = 0
         true_negatives = 0
 
@@ -389,7 +403,9 @@ class ElasticsearchIrEvaluator:
             else 0
         )
 
-    def calculate_ndcg(self, qa_pairs: List[QandA]) -> float:
+    def calculate_ndcg(
+        self, qa_pairs: List[QandA], top_n: Optional[int] = None
+    ) -> float:
         """
         Calculate the normalized Discounted Cumulative Gain (nDCG) of the search results.
 
@@ -398,7 +414,10 @@ class ElasticsearchIrEvaluator:
 
         Args:
             qa_pairs (List[QandA]): A list of question-answer pairs for evaluation.
+            top_n (int, optional): The number of top results to consider for evaluation. Defaults to the class's top_n attribute.
         """
+        if top_n is not None:
+            self.top_n = top_n
 
         def dcg(scores):
             return np.sum([(2**s - 1) / np.log2(i + 2) for i, s in enumerate(scores)])
@@ -554,7 +573,6 @@ class ElasticsearchIrEvaluator:
         if top_n is not None:
             self.top_n = top_n
 
-        results = Result()
         sum_precision = (
             sum_recall
         ) = sum_fpr = sum_ndcg = sum_map = sum_cg = sum_bpref = sum_mrr = 0
@@ -625,14 +643,15 @@ class ElasticsearchIrEvaluator:
                 else 0
             )
 
-        # Finalize the averages
-        results.Precision = sum_precision / total_pairs
-        results.Recall = sum_recall / total_pairs
-        results.FPR = sum_fpr / total_pairs if non_relevant_documents else None
-        results.nDCG = sum_ndcg / total_pairs
-        results.MAP = sum_map / total_pairs
-        results.CG = sum_cg / total_pairs
-        results.BPref = sum_bpref / total_pairs if non_relevant_documents else None
-        results.MRR = sum_mrr / total_pairs
+        results = Result(
+            Precision=sum_precision / total_pairs,
+            Recall=sum_recall / total_pairs,
+            FPR=sum_fpr / total_pairs if non_relevant_documents else None,
+            nDCG=sum_ndcg / total_pairs,
+            MAP=sum_map / total_pairs,
+            CG=sum_cg / total_pairs,
+            BPref=sum_bpref / total_pairs if non_relevant_documents else None,
+            MRR=sum_mrr / total_pairs,
+        )
 
         return results

@@ -42,3 +42,18 @@ class Result(BaseModel):
     CG: Optional[float] = None
     BPref: Optional[float] = None
     MRR: Optional[float] = None
+
+    @validator(
+        "Precision",
+        "Recall",
+        "FPR",
+        "nDCG",
+        "MAP",
+        "CG",
+        "BPref",
+        "MRR",
+        pre=True,
+        always=True,
+    )
+    def round_float(cls, v):
+        return round(v, 3) if v is not None else None
