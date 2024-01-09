@@ -527,16 +527,15 @@ class ElasticsearchIrEvaluator:
         total_bpref = 0
 
         for qa_pair in qa_pairs:
-            search_results = set(self._search(qa_pair))
+            search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             non_relevant_documents = (
                 set(qa_pair.negative_answers) if qa_pair.negative_answers else set()
             )
 
-            bpref_score, count_relevant = 0, 0
+            bpref_score = 0
             for doc_id in search_results:
                 if doc_id in relevant_documents:
-                    count_relevant += 1
                     bpref_score += 1 - (
                         len(
                             [
@@ -544,7 +543,7 @@ class ElasticsearchIrEvaluator:
                                 for d in non_relevant_documents
                                 if d in search_results
                                 and search_results.index(d)
-                                < search_results.index(doc_id)
+                                > search_results.index(doc_id)
                             ]
                         )
                         / len(non_relevant_documents)
@@ -593,8 +592,8 @@ class ElasticsearchIrEvaluator:
             dcg = idcg = 0
 
             # FPR variables
-            false_positives = len(search_results & non_relevant_documents)
-            true_negatives = len(non_relevant_documents - search_results)
+            false_positives = len(set(search_results) & non_relevant_documents)
+            true_negatives = len(non_relevant_documents - set(search_results))
 
             for i, doc_id in enumerate(search_results, 1):
                 if doc_id in relevant_documents:
@@ -607,16 +606,18 @@ class ElasticsearchIrEvaluator:
                         sum_mrr += 1 / i
                         mrr_added = True
 
-                if doc_id in non_relevant_documents:
-                    non_relevant_before = len(
+                    non_relevant_lower_rank = len(
                         [
                             d
                             for d in non_relevant_documents
-                            if d in search_results and search_results.index(d) < i
+                            if d in search_results
+                            and search_results.index(d) > search_results.index(doc_id)
                         ]
                     )
-                    bpref_score += 1 - (
-                        non_relevant_before / len(non_relevant_documents)
+                    bpref_score += (
+                        1 - (non_relevant_lower_rank / len(non_relevant_documents))
+                        if non_relevant_documents
+                        else 1
                     )
 
                 if i <= len(relevant_documents):
