@@ -173,11 +173,7 @@ class ElasticsearchIrEvaluator:
                 self.logger.error(f"An error occurred: {e}")
                 break
 
-    def index(
-        self,
-        documents: List[Document],
-        pipeline: Optional[str] = None
-    ) -> None:
+    def index(self, documents: List[Document], pipeline: Optional[str] = None) -> None:
         """
         Index the given documents in Elasticsearch.
 
@@ -392,21 +388,20 @@ class ElasticsearchIrEvaluator:
         """
         if top_n is not None:
             self.top_n = top_n
-        false_positives = 0
-        true_negatives = 0
+        total_fpr = 0
+        num_pairs = len(qa_pairs)
 
         for qa_pair in qa_pairs:
             incorrect_answers = set(qa_pair.negative_answers)
 
             search_results = set(self._search(qa_pair))
-            false_positives += len(search_results & incorrect_answers)
-            true_negatives += len(incorrect_answers - search_results)
+            false_positives = len(search_results & incorrect_answers)
+            true_negatives = len(incorrect_answers - search_results)
 
-        return (
-            false_positives / (false_positives + true_negatives)
-            if (false_positives + true_negatives) > 0
-            else 0
-        )
+            if (false_positives + true_negatives) > 0:
+                total_fpr += false_positives / (false_positives + true_negatives)
+
+        return total_fpr / num_pairs if num_pairs > 0 else 0
 
     def calculate_ndcg(
         self, qa_pairs: List[QandA], top_n: Optional[int] = None
@@ -597,6 +592,10 @@ class ElasticsearchIrEvaluator:
             # nDCG variables
             dcg = idcg = 0
 
+            # FPR variables
+            false_positives = len(search_results & non_relevant_documents)
+            true_negatives = len(non_relevant_documents - search_results)
+
             for i, doc_id in enumerate(search_results, 1):
                 if doc_id in relevant_documents:
                     relevant_count += 1
@@ -642,9 +641,10 @@ class ElasticsearchIrEvaluator:
             sum_recall += (
                 true_positives / len(relevant_documents) if relevant_documents else 0
             )
+
             sum_fpr += (
-                false_positives / len(non_relevant_documents)
-                if non_relevant_documents
+                false_positives / (false_positives + true_negatives)
+                if (false_positives + true_negatives) > 0
                 else 0
             )
 
