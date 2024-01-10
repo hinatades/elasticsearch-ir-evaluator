@@ -75,10 +75,7 @@ def main():
                 passages=passages,
             )
         )
-    evaluator.load_corpus(documents)
-
-    evaluator.create_index_from_corpus()
-    evaluator.index_corpus()
+    evaluator.index(documents)
 
     # Load the QA dataset and vectorize each query
     qa_dataset = load_dataset(
@@ -97,8 +94,6 @@ def main():
             )
         )
 
-    evaluator.load_qa_pairs(qa_pairs)
-
     # Define a custom query template for Elasticsearch
     search_template = {
         "query": {
@@ -112,8 +107,8 @@ def main():
     evaluator.set_search_template(search_template)
 
     # Calculate and print the Mean Reciprocal Rank (MRR)
-    mrr = evaluator.calculate_mrr()
-    print(f"MRR: {mrr}")
+    result = evaluator.calculate(qa_pairs)
+    print(result.model_dump_json(indent=4))
 
 
 if __name__ == "__main__":

@@ -78,6 +78,9 @@ def main():
         "search_analyzer": "ja-search-kuromoji",
     }
 
+    evaluator.set_index_settings(custom_index_settings)
+    evaluator.set_text_field_config(text_field_config)
+
     documents = []
     for i, row in enumerate(tqdm(corpus_dataset)):
         documents.append(
@@ -87,11 +90,7 @@ def main():
                 text=row["text"],
             )
         )
-    evaluator.load_corpus(documents)
-    evaluator.index_corpus()
-    evaluator.create_index_from_corpus(
-        index_settings=custom_index_settings, text_field_config=text_field_config
-    )
+    evaluator.index(documents)
 
     # Load the QA dataset and vectorize each query
     qa_dataset = load_dataset(
@@ -110,8 +109,6 @@ def main():
             )
         )
 
-    evaluator.load_qa_pairs(qa_pairs)
-
     # Define a custom query template for Elasticsearch
     search_template = {
         "query": {
@@ -122,10 +119,8 @@ def main():
     }
     evaluator.set_search_template(search_template)
 
-    # Calculate and print the Mean Reciprocal Rank (MRR)
-    mrr = evaluator.calculate_mrr()
-    print(f"MRR: {mrr}")
-
+    result = evaluator.calculate(qa_pairs)
+    print(result.model_dump_json(indent=4))
 
 if __name__ == "__main__":
     main()
