@@ -173,11 +173,7 @@ class ElasticsearchIrEvaluator:
                 self.logger.error(f"An error occurred: {e}")
                 break
 
-    def index(
-        self,
-        documents: List[Document],
-        pipeline: Optional[str] = None
-    ) -> None:
+    def index(self, documents: List[Document], pipeline: Optional[str] = None) -> None:
         """
         Index the given documents in Elasticsearch.
 
@@ -392,21 +388,20 @@ class ElasticsearchIrEvaluator:
         """
         if top_n is not None:
             self.top_n = top_n
-        false_positives = 0
-        true_negatives = 0
+        total_fpr = 0
+        num_pairs = len(qa_pairs)
 
         for qa_pair in qa_pairs:
             incorrect_answers = set(qa_pair.negative_answers)
 
             search_results = set(self._search(qa_pair))
-            false_positives += len(search_results & incorrect_answers)
-            true_negatives += len(incorrect_answers - search_results)
+            false_positives = len(search_results & incorrect_answers)
+            true_negatives = len(incorrect_answers - search_results)
 
-        return (
-            false_positives / (false_positives + true_negatives)
-            if (false_positives + true_negatives) > 0
-            else 0
-        )
+            if (false_positives + true_negatives) > 0:
+                total_fpr += false_positives / (false_positives + true_negatives)
+
+        return total_fpr / num_pairs if num_pairs > 0 else 0
 
     def calculate_ndcg(
         self, qa_pairs: List[QandA], top_n: Optional[int] = None
@@ -532,16 +527,15 @@ class ElasticsearchIrEvaluator:
         total_bpref = 0
 
         for qa_pair in qa_pairs:
-            search_results = set(self._search(qa_pair))
+            search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             non_relevant_documents = (
                 set(qa_pair.negative_answers) if qa_pair.negative_answers else set()
             )
 
-            bpref_score, count_relevant = 0, 0
+            bpref_score = 0
             for doc_id in search_results:
                 if doc_id in relevant_documents:
-                    count_relevant += 1
                     bpref_score += 1 - (
                         len(
                             [
@@ -549,7 +543,7 @@ class ElasticsearchIrEvaluator:
                                 for d in non_relevant_documents
                                 if d in search_results
                                 and search_results.index(d)
-                                < search_results.index(doc_id)
+                                > search_results.index(doc_id)
                             ]
                         )
                         / len(non_relevant_documents)
@@ -597,6 +591,10 @@ class ElasticsearchIrEvaluator:
             # nDCG variables
             dcg = idcg = 0
 
+            # FPR variables
+            false_positives = len(set(search_results) & non_relevant_documents)
+            true_negatives = len(non_relevant_documents - set(search_results))
+
             for i, doc_id in enumerate(search_results, 1):
                 if doc_id in relevant_documents:
                     relevant_count += 1
@@ -608,16 +606,18 @@ class ElasticsearchIrEvaluator:
                         sum_mrr += 1 / i
                         mrr_added = True
 
-                if doc_id in non_relevant_documents:
-                    non_relevant_before = len(
+                    non_relevant_lower_rank = len(
                         [
                             d
                             for d in non_relevant_documents
-                            if d in search_results and search_results.index(d) < i
+                            if d in search_results
+                            and search_results.index(d) > search_results.index(doc_id)
                         ]
                     )
-                    bpref_score += 1 - (
-                        non_relevant_before / len(non_relevant_documents)
+                    bpref_score += (
+                        1 - (non_relevant_lower_rank / len(non_relevant_documents))
+                        if non_relevant_documents
+                        else 1
                     )
 
                 if i <= len(relevant_documents):
@@ -642,9 +642,10 @@ class ElasticsearchIrEvaluator:
             sum_recall += (
                 true_positives / len(relevant_documents) if relevant_documents else 0
             )
+
             sum_fpr += (
-                false_positives / len(non_relevant_documents)
-                if non_relevant_documents
+                false_positives / (false_positives + true_negatives)
+                if (false_positives + true_negatives) > 0
                 else 0
             )
 
