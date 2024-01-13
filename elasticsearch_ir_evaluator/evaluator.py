@@ -129,6 +129,8 @@ class ElasticsearchIrEvaluator:
             mapping["properties"]["passages"]["properties"]["vector"] = {
                 "type": "dense_vector",
                 "dims": vector_dims,
+                "index": True,
+                "similarity": "cosine",
             }
 
         # Index settings
