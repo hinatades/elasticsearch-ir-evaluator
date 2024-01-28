@@ -5,9 +5,12 @@ from elasticsearch import Elasticsearch
 from openai.embeddings_utils import get_embedding
 from tqdm.auto import tqdm
 
-from elasticsearch_ir_evaluator.evaluator import (Document,
-                                                  ElasticsearchIrEvaluator,
-                                                  Passage, QandA)
+from elasticsearch_ir_evaluator.evaluator import (
+    Document,
+    ElasticsearchIrEvaluator,
+    Passage,
+    QandA,
+)
 
 
 def sliding_window_text_chunking(text, window_size, overlap):

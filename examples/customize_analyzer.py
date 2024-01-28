@@ -4,9 +4,11 @@ from datasets import load_dataset
 from elasticsearch import Elasticsearch
 from tqdm.auto import tqdm
 
-from elasticsearch_ir_evaluator.evaluator import (Document,
-                                                  ElasticsearchIrEvaluator,
-                                                  QandA)
+from elasticsearch_ir_evaluator.evaluator import (
+    Document,
+    ElasticsearchIrEvaluator,
+    QandA,
+)
 
 
 def main():
@@ -121,6 +123,7 @@ def main():
 
     result = evaluator.calculate(qa_pairs)
     print(result.model_dump_json(indent=4))
+
 
 if __name__ == "__main__":
     main()

@@ -16,5 +16,6 @@ setup(
         "elasticsearch>=8,<9",
         "numpy",
         "pydantic",
+        "tqdm",
     ],
 )
