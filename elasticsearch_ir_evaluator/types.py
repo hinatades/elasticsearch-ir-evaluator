@@ -46,12 +46,12 @@ class Result(BaseModel):
     @field_validator(
         "Precision",
         "Recall",
-        "FPR",
+        "MRR",
+        "CG",
         "nDCG",
         "MAP",
-        "CG",
+        "FPR",
         "BPref",
-        "MRR",
     )
     def round_float(cls, v):
         return round(v, 3) if v is not None else None

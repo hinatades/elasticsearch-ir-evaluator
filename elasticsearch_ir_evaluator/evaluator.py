@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
+from tqdm.auto import tqdm
 from elasticsearch import Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import BulkIndexError, bulk
@@ -237,6 +238,7 @@ class ElasticsearchIrEvaluator:
             search_template (Dict): A dictionary representing the search template.
         """
         self.search_template = search_template
+        self.logger.info(f"Search template set to: {self.search_template}")
 
     def _replace_template(self, template: Union[Dict, List, str], qa_pair: QandA):
         """
@@ -303,7 +305,7 @@ class ElasticsearchIrEvaluator:
             self.top_n = top_n
         total_precision = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             correct_answers = set(qa_pair.answers)
 
             search_results = set(self._search(qa_pair))
@@ -334,7 +336,7 @@ class ElasticsearchIrEvaluator:
             self.top_n = top_n
         total_recall = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             correct_answers = set(qa_pair.answers)
 
             search_results = set(self._search(qa_pair))
@@ -364,7 +366,7 @@ class ElasticsearchIrEvaluator:
 
         total_mrr = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             correct_answers = set(qa_pair.answers)
             search_results = self._search(qa_pair)
 
@@ -393,7 +395,7 @@ class ElasticsearchIrEvaluator:
         total_fpr = 0
         num_pairs = len(qa_pairs)
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             incorrect_answers = set(qa_pair.negative_answers)
 
             search_results = set(self._search(qa_pair))
@@ -426,7 +428,7 @@ class ElasticsearchIrEvaluator:
 
         total_ndcg = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             correct_answers = set(qa_pair.answers)
 
             search_results = self._search(qa_pair)
@@ -463,7 +465,7 @@ class ElasticsearchIrEvaluator:
             self.top_n = top_n
         total_average_precision = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             search_results = set(self._search(qa_pair))
             relevant_documents = set(qa_pair.answers)
             average_precision, relevant_count = 0, 0
@@ -497,7 +499,7 @@ class ElasticsearchIrEvaluator:
             self.top_n = top_n
         total_cg = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             cg_score = sum(
@@ -528,7 +530,7 @@ class ElasticsearchIrEvaluator:
             self.top_n = top_n
         total_bpref = 0
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             non_relevant_documents = (
@@ -579,7 +581,7 @@ class ElasticsearchIrEvaluator:
         ) = sum_fpr = sum_ndcg = sum_map = sum_cg = sum_bpref = sum_mrr = 0
         total_pairs = len(qa_pairs)
 
-        for qa_pair in qa_pairs:
+        for qa_pair in tqdm(qa_pairs):
             search_results = self._search(qa_pair)
             relevant_documents = set(qa_pair.answers)
             non_relevant_documents = (

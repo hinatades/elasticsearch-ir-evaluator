@@ -2,3 +2,4 @@ elasticsearch>=8,<9
 pydantic>=2
 pytest
 numpy
+tqdm
