@@ -55,3 +55,45 @@ class Result(BaseModel):
     )
     def round_float(cls, v):
         return round(v, 3) if v is not None else None
+
+    def to_markdown(self):
+        headers = ["Metric", "Value"]
+        rows = [
+            ("Precision", self.Precision),
+            ("Recall", self.Recall),
+            ("MRR", self.MRR),
+            ("MAP", self.MAP),
+            ("CG", self.CG),
+            ("nDCG", self.nDCG),
+            ("FPR", self.FPR),
+            ("BPref", self.BPref),
+        ]
+        # Determine the maximum width of each column
+        max_widths = [
+            max(len(str(row[i])) for row in rows + [headers]) for i in range(2)
+        ]
+        # Create a format specifier for each column
+        column_formats = [f"{{:<{max_width}}}" for max_width in max_widths]
+        # Format header
+        header_line = (
+            "| "
+            + " | ".join(
+                column_formats[i].format(header) for i, header in enumerate(headers)
+            )
+            + " |"
+        )
+        separator_line = (
+            "|-" + "-|-".join("-" * max_width for max_width in max_widths) + "-|"
+        )
+        # Format rows
+        row_lines = [
+            "| "
+            + " | ".join(
+                column_formats[i].format(row[i] if row[i] is not None else "")
+                for i in range(2)
+            )
+            + " |"
+            for row in rows
+        ]
+        # Combine all parts
+        return "\n".join([header_line, separator_line] + row_lines)
