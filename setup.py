@@ -13,7 +13,7 @@ setup(
     license="MIT",
     packages=find_packages(),
     install_requires=[
-        "elasticsearch>=8,<9",
+        "elasticsearch>=8.11",
         "numpy",
         "pydantic",
         "tqdm",
