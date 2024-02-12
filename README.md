@@ -8,12 +8,12 @@
 
 - Precision
 - Recall
-- False Positive Rate (FPR)
-- Normalized Discounted Cumulative Gain (nDCG)
+- Mean Reciprocal Rank (MRR)
 - Mean Average Precision (MAP)
 - Cumulative Gain (CG)
+- Normalized Discounted Cumulative Gain (nDCG)
+- False Positive Rate (FPR)
 - Binary Preference (BPref)
-- Mean Reciprocal Rank (MRR)
 
 These metrics provide a comprehensive assessment of search performance, catering to various aspects of IR system evaluation. The tool's flexibility allows users to select specific metrics according to their evaluation needs.
 
