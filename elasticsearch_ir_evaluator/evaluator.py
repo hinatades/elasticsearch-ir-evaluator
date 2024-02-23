@@ -286,7 +286,11 @@ class ElasticsearchIrEvaluator:
 
         try:
             response = self.es.search(
-                index=self.index_name, body=search_body, size=self.top_n
+                index=self.index_name,
+                query=search_body.get("query"),
+                knn=search_body.get("knn"),
+                rank=search_body.get("rank"),
+                size=self.top_n,
             )
         except BadRequestError as e:
             self.logger.error("BadRequestError occurred.")
