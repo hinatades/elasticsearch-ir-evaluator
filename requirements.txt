@@ -1,4 +1,4 @@
-elasticsearch>=8,<9
+elasticsearch>=8.11
 pydantic>=2
 pytest
 numpy

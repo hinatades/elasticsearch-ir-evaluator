@@ -6,7 +6,7 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 from tqdm.auto import tqdm
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, BadRequestError
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import BulkIndexError, bulk
 
@@ -284,9 +284,20 @@ class ElasticsearchIrEvaluator:
 
         search_body["_source"] = ["id"]
 
-        response = self.es.search(
-            index=self.index_name, body=search_body, size=self.top_n
-        )
+        try:
+            response = self.es.search(
+                index=self.index_name,
+                query=search_body.get("query"),
+                knn=search_body.get("knn"),
+                rank=search_body.get("rank"),
+                size=self.top_n,
+            )
+        except BadRequestError as e:
+            self.logger.error("BadRequestError occurred.")
+            self.logger.error("Status code: %d", e.status_code)
+            self.logger.error("Error type: %s", e.error)
+            self.logger.error("Error details: %s", e.info)
+            self.logger.error("Search body: %s", search_body)
         return [hit["_source"]["id"] for hit in response["hits"]["hits"]]
 
     def calculate_precision(
