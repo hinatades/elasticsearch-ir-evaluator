@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="elasticsearch_ir_evaluator",
-    version="0.1.0",
+    version="0.3.0",
     description="A Python package for easily calculating information retrieval (IR) accuracy metrics using Elasticsearch and datasets.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
