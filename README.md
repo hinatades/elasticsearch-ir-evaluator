@@ -67,11 +67,9 @@ documents = [
     # ... more documents
 ]
 
-# Set custom index settings and text field configurations
-index_settings = {"number_of_shards": 1, "number_of_replicas": 0}
+# Set custom index text field configurations
 text_field_config = {"analyzer": "standard"}
 
-evaluator.set_index_settings(index_settings)
 evaluator.set_text_field_config(text_field_config)
 
 # Create a new index or set an existing one
@@ -87,9 +85,20 @@ Customize the search query template for Elasticsearch. Use `{{question}}` for th
 
 ```python
 search_template = {
-    "match": {
-        "text": "{{question}}"
-    }
+    "query": {
+        "multi_match": {
+            "query": "{{question}}",
+            "fields": ["title", "text"],
+        }
+    },
+    "knn": [
+        {
+            "field": "vector",
+            "query_vector": "{{vector}}",
+            "k": 5,
+            "num_candidates": 100,
+        }
+    ],
 }
 
 evaluator.set_search_template(search_template)
@@ -110,7 +119,7 @@ qa_pairs = [
 results = evaluator.calculate(qa_pairs)
 
 # Output results
-print(result.model_dump_json(indent=4))
+print(result.to_markdown())
 ```
 
 This step involves a comprehensive evaluation of search performance using the provided question-answer pairs. The `.calculate()` method computes all metrics that can be derived from the dataset's structure.
