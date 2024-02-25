@@ -93,7 +93,7 @@ class ElasticsearchIrEvaluator:
             vector_field_config (Dict): A dictionary containing configurations for `dense_vector` fields.
         """
         # Ensure that 'dims' and 'type' are not overridden if not specified
-        self.vector_field_config = vector_field_config
+        self.dense_vector_field_config = vector_field_config
         self.logger.info(
             f"Configuration for `dense_vector` fields set to: {json.dumps(vector_field_config, indent=2)}"
         )
@@ -145,11 +145,11 @@ class ElasticsearchIrEvaluator:
             }
 
             # If vector_field_config is provided and does not specify 'dims', merge settings
-            if hasattr(self, "dense_vector_field_config"):
+            if self.dense_vector_field_config:
                 # Exclude 'dims' and 'type' from vector_field_config to avoid overriding automatic determination
                 vector_field_config_excluding_dims_type = {
                     key: val
-                    for key, val in self.vector_field_config.items()
+                    for key, val in self.dense_vector_field_config.items()
                     if key not in ["dims", "type"]
                 }
                 vector_field_settings.update(vector_field_config_excluding_dims_type)
