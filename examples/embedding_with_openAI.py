@@ -6,18 +6,23 @@ The evaluation encompasses full-text search, vector search, and hybrid search me
 import logging
 import os
 import random
+import re
 
 from datasets import load_dataset
 from elasticsearch import Elasticsearch
-from elasticsearch_ir_evaluator.evaluator import (Document,
-                                                  ElasticsearchIrEvaluator,
-                                                  QandA)
+from elasticsearch_ir_evaluator.evaluator import (
+    Document,
+    Passage,
+    ElasticsearchIrEvaluator,
+    QandA,
+)
 from openai import OpenAI
 from tqdm.auto import tqdm
 
 logging.getLogger("httpx").setLevel(logging.CRITICAL)
 
 MAX_TEXT_LENGTH = 8191 - 1000
+OVERLAP_SIZE = 64  # Number of characters to overlap
 
 client = OpenAI()
 
@@ -27,8 +32,36 @@ def vectorize_texts(texts):
     return [doc.embedding for doc in response.data]
 
 
+MAX_TEXT_LENGTH = 8191 - 1000  # Maximum text length
+
+
 def split_text(text):
-    return [text[i : i + MAX_TEXT_LENGTH] for i in range(0, len(text), MAX_TEXT_LENGTH)]
+    # Split the text using spaces, tabs, newlines, and periods as delimiters
+    segments = re.split(r"[ \u3000\t\n。]+", text)
+    chunks = []
+    current_chunk = ""
+    previous_segment = ""
+
+    for segment in segments:
+        if segment:  # Ignore empty segments
+            if len(current_chunk + segment) + 1 <= MAX_TEXT_LENGTH - OVERLAP_SIZE:
+                # If the current chunk plus the new segment is within the limit, add the segment
+                current_chunk += segment + " "
+            else:
+                # When adding the current segment exceeds the limit
+                # finalize the current chunk and start a new one
+                # Ensure overlap by including the end of the current chunk in the new chunk
+                if current_chunk:
+                    # Avoid adding an empty chunk
+                    chunks.append(current_chunk.strip())
+                current_chunk = previous_segment[-OVERLAP_SIZE:] + " " + segment + " "
+            previous_segment = segment  # Store the last segment added
+
+    # Add the last chunk if it's not empty
+    if current_chunk.strip():
+        chunks.append(current_chunk.strip())
+
+    return chunks
 
 
 def compress_datasets(corpus_dataset, qa_dataset, limit):
@@ -126,7 +159,7 @@ def main():
             passages = []
             for t in split_texts:
                 vectors = vectorize_texts([t])
-                passages.extend([{"text": t, "vector": vectors[0]}])
+                passages.append(Passage(text=t, vector=vectors[0]))
             documents.append(
                 Document(id=row["docid"], title=row["title"], passages=passages)
             )
@@ -144,7 +177,7 @@ def main():
                         id=r["docid"],
                         title=r["title"],
                         text=r["text"],
-                        vector=vec,
+                        passages=[Passage(vector=vec)],
                     )
                 )
             chunk = []  # Reset the batch
@@ -161,7 +194,7 @@ def main():
                     id=r["docid"],
                     title=r["title"],
                     text=r["text"],
-                    vector=vec,
+                    passages=[Passage(vector=vec)],
                 )
             )
         evaluator.index(documents)
