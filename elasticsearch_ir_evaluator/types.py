@@ -11,7 +11,7 @@ class QandA(BaseModel):
 
 
 class Passage(BaseModel):
-    text: str
+    text: Optional[str] = None
     vector: Optional[List[float]] = None
 
 
