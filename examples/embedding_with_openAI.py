@@ -7,17 +7,24 @@ import logging
 import os
 import random
 import re
+import sys
+from pathlib import Path
 
 from datasets import load_dataset
+
+script_location = Path(__file__).resolve().parent
+sys.path.append(str(script_location.parent))
+
 from elasticsearch import Elasticsearch
-from elasticsearch_ir_evaluator.evaluator import (
-    Document,
-    Passage,
-    ElasticsearchIrEvaluator,
-    QandA,
-)
 from openai import OpenAI
 from tqdm.auto import tqdm
+
+from elasticsearch_ir_evaluator.evaluator import (
+    Document,
+    ElasticsearchIrEvaluator,
+    Passage,
+    QandA,
+)
 
 logging.getLogger("httpx").setLevel(logging.CRITICAL)
 
@@ -152,24 +159,42 @@ def main():
 
     documents = []
     chunk = []
-    for row in tqdm(compressed_corpus):
-        text = row["text"]
-        if len(text) >= MAX_TEXT_LENGTH:
-            split_texts = split_text(text)
-            passages = []
-            for t in split_texts:
-                vectors = vectorize_texts([t])
-                passages.append(Passage(text=t, vector=vectors[0]))
-            documents.append(
-                Document(id=row["docid"], title=row["title"], passages=passages)
-            )
-            continue
+    try:
+        for row in tqdm(compressed_corpus):
+            text = row["text"]
+            if len(text) >= MAX_TEXT_LENGTH:
+                split_texts = split_text(text)
+                passages = []
+                for t in split_texts:
+                    vectors = vectorize_texts([t])
+                    passages.append(Passage(text=t, vector=vectors[0]))
+                documents.append(
+                    Document(id=row["docid"], title=row["title"], passages=passages)
+                )
+                continue
 
-        # Add text to the current batch
-        if chunk and (
-            sum(len(r["text"]) for r in chunk) + len(text) >= MAX_TEXT_LENGTH
-        ):
-            # If adding this text exceeds MAX_TEXT_LENGTH, process the current batch first
+            # Add text to the current batch
+            if chunk and (
+                sum(len(r["text"]) for r in chunk) + len(text) >= MAX_TEXT_LENGTH
+            ):
+                # If adding this text exceeds MAX_TEXT_LENGTH, process the current batch first
+                vectors = vectorize_texts([r["text"] for r in chunk])
+                for r, vec in zip(chunk, vectors):
+                    documents.append(
+                        Document(
+                            id=r["docid"],
+                            title=r["title"],
+                            text=r["text"],
+                            passages=[Passage(vector=vec)],
+                        )
+                    )
+                chunk = []  # Reset the batch
+            chunk.append(row)
+
+            if len(documents) >= 1000:
+                evaluator.index(documents)
+                documents = []
+        if chunk:
             vectors = vectorize_texts([r["text"] for r in chunk])
             for r, vec in zip(chunk, vectors):
                 documents.append(
@@ -180,24 +205,10 @@ def main():
                         passages=[Passage(vector=vec)],
                     )
                 )
-            chunk = []  # Reset the batch
-        chunk.append(row)
-
-        if len(documents) >= 1000:
             evaluator.index(documents)
-            documents = []
-    if chunk:
-        vectors = vectorize_texts([r["text"] for r in chunk])
-        for r, vec in zip(chunk, vectors):
-            documents.append(
-                Document(
-                    id=r["docid"],
-                    title=r["title"],
-                    text=r["text"],
-                    passages=[Passage(vector=vec)],
-                )
-            )
-        evaluator.index(documents)
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt received, saving progress...")
+        evaluator.save_progress_log()
 
     # evaluator.set_index_name("corpus_xxxxxxx_xxxxxx")
 
