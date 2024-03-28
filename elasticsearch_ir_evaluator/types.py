@@ -22,6 +22,7 @@ class Document(BaseModel):
     vector: Optional[List[float]] = None
     passages: Optional[List[Passage]] = None
 
+
 class Result(BaseModel):
     Precision: Optional[float] = None
     Recall: Optional[float] = None

@@ -1,14 +1,16 @@
 import json
 import logging
+import os
+import signal
 import sys
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
-from tqdm.auto import tqdm
-from elasticsearch import Elasticsearch, BadRequestError
+from elasticsearch import BadRequestError, Elasticsearch
 from elasticsearch.exceptions import NotFoundError
 from elasticsearch.helpers import BulkIndexError, bulk
+from tqdm.auto import tqdm
 
 from .types import Document, Passage, QandA, Result
 
@@ -34,8 +36,41 @@ class ElasticsearchIrEvaluator:
         self.dense_vector_field_config = None
         self.search_template = None
         self.logger = logging.getLogger(__name__)
+        self.last_processed_id = None
+        self.processed_count = 0
+        self.log_file_path = os.path.join(
+            os.getcwd(), "elasticsearch-ir-evaluator-log.json"
+        )
+        self.setup_sigterm_handler()
+        self.load_progress_log()
         logging.basicConfig(level=logging.INFO)
         logging.getLogger("elastic_transport.transport").setLevel(logging.CRITICAL)
+
+    def setup_sigterm_handler(self):
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
+
+    def sigterm_handler(self, signum, frame):
+        self.logger.info("SIGTERM received, saving progress...")
+        self.save_progress_log()
+        sys.exit(0)
+
+    def save_progress_log(self):
+        log_data = {
+            "last_processed_id": self.last_processed_id,
+            "index_name": self.index_name,
+            "processed_count": self.processed_count,
+            "last_checkpoint_timestamp": datetime.now().isoformat(),
+        }
+        with open(self.log_file_path, "w") as log_file:
+            json.dump(log_data, log_file, indent=2)
+
+    def load_progress_log(self):
+        if os.path.exists(self.log_file_path):
+            with open(self.log_file_path, "r") as log_file:
+                log_data = json.load(log_file)
+                self.last_processed_id = log_data.get("last_processed_id")
+                self.index_name = log_data.get("index_name")
+                self.processed_count = log_data.get("processed_count")
 
     def set_log_level(self, level: int) -> None:
         """
@@ -219,14 +254,24 @@ class ElasticsearchIrEvaluator:
 
         actions = []
         doc_count = len(documents)
+        resumed = False if self.last_processed_id else True
         end = 0
         self.logger.info(f"Indexing {doc_count} documents...")
         for doc in documents:
+
+            if not resumed:
+                if doc.id == self.last_processed_id:
+                    resumed = True
+                continue
+
             action = {"_index": self.index_name, "_source": doc.dict()}
             if pipeline:
                 action["_op_type"] = "index"
                 action["pipeline"] = pipeline
             actions.append(action)
+
+            self.last_processed_id = doc.id
+            self.processed_count += 1
 
             if len(actions) >= self.max_bulk_size:
                 self._bulk(actions)
